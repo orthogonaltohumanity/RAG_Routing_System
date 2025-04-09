@@ -50,7 +50,6 @@ This serves as a foundational example for building RAG systems and is intended a
         ```
 
 4.  **Install Dependencies:**
-    *   *(Ensure you have created a `requirements.txt` file first! Run `pip freeze > requirements.txt` in your activated environment after installing the necessary packages like `langchain`, `langchain-community`, `langchain-ollama`, `chromadb`, `pypdf`)*
     ```bash
     pip install -r requirements.txt
     ```
