@@ -4,11 +4,9 @@ import argparse
 import os
 import sys
 import logging
-from rag_system import PdfRagSystem  # Assuming your class is in rag_system.py
+from rag_system import PdfRagSystem
 
 # Configure basic logging
-# Levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
-# This will show messages from your class if you implement logging there
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
