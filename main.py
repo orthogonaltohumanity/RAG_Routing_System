@@ -46,7 +46,7 @@ def main():
     parser.add_argument(
         "--llm-model",
         type=str,
-        default="phi3",  # Changed default to a potentially smaller model
+        default="phi3",
         help="Name of the Ollama chat model to use."
     )
     parser.add_argument(
