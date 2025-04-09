@@ -34,7 +34,6 @@ This serves as a foundational example for building RAG systems and is intended a
 2.  **Clone the Repository:**
     ```bash
     git clone https://github.com/solilei/PDF-RAG-System.git
-    cd PDF-RAG-System
     ```
 
 3.  **Set up a Virtual Environment:**
