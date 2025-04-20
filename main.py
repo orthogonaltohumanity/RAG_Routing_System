@@ -1,146 +1,268 @@
-# main.py
-
-import argparse
-import os
-import sys
-import logging
-from rag_system import PdfRagSystem
-
-# Configure basic logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+from rag_system import RagSystem
+from multi import llmNetwork
+from rag_system import find_pdf_files
 
 
-def find_pdf_files(directory_path: str) -> list[str]:
-    """Finds all PDF files in the specified directory."""
-    pdf_files = []
+import string
+import os,sys
+from contextlib import contextmanager
+import pyttsx3
+import speech_recognition as sr
+import pyaudio
+import torch
+from TTS.api import TTS
+import wave
+import sounddevice
+
+def write_memories_to_disk(memoryRAG,messages):
     try:
-        for filename in os.listdir(directory_path):
-            if filename.lower().endswith(".pdf"):
-                full_path = os.path.join(directory_path, filename)
-                if os.path.isfile(full_path):
-                    pdf_files.append(full_path)
-    except OSError as e:
-        logging.error(f"Error accessing directory {directory_path}: {e}")
-        raise  # Re-raise the exception after logging
-    return pdf_files
-
-
-def main():
-    """Main function to run the PDF RAG system."""
-    parser = argparse.ArgumentParser(
-        description="Chat with PDF documents locally using Ollama and LangChain."
-    )
-    parser.add_argument(
-        "--pdf-dir",
-        type=str,
-        required=True,
-        help="Path to the directory containing PDF files."
-    )
-    parser.add_argument(
-        "--embed-model",
-        type=str,
-        default="mxbai-embed-large",
-        help="Name of the Ollama embedding model to use."
-    )
-    parser.add_argument(
-        "--llm-model",
-        type=str,
-        default="phi3",
-        help="Name of the Ollama chat model to use."
-    )
-    parser.add_argument(
-        "--chunk-size",
-        type=int,
-        default=1200,
-        help="Chunk size for splitting documents."
-    )
-    parser.add_argument(
-        "--chunk-overlap",
-        type=int,
-        default=300,
-        help="Chunk overlap for splitting documents."
-    )
-    parser.add_argument(
-        "--collection-name",
-        type=str,
-        default="multi-pdf-rag",
-        help="Name for the ChromaDB collection."
-    )
-
-    args = parser.parse_args()
-
-    # --- Validate Directory ---
-    if not os.path.isdir(args.pdf_dir):
-        logging.error(f"Error: PDF directory not found at '{args.pdf_dir}'")
-        print(f"Error: PDF directory not found at '{args.pdf_dir}'")
-        sys.exit(1)  # Exit if the directory doesn't exist
-
-    print(f"PDF directory found: {args.pdf_dir}")
-    logging.info(f"Using PDF directory: {args.pdf_dir}")
-
-    # --- Find PDF Files ---
-    try:
-        pdf_files = find_pdf_files(args.pdf_dir)
-        if not pdf_files:
-            logging.warning(f"No PDF files found in directory: {args.pdf_dir}")
-            print(f"Warning: No PDF files found in {args.pdf_dir}. Exiting.")
-            sys.exit(0)  # Exit gracefully if no PDFs found
-
-        pdf_basenames = [os.path.basename(f) for f in pdf_files]
-        print(f"Found {len(pdf_files)} PDF files: {', '.join(pdf_basenames)}")
-        logging.info(f"Found {len(pdf_files)} PDF(s): {', '.join(pdf_basenames)}")
-
+        chunks=memoryRAG.load_messages(messages)
+        memoryRAG.create_vector_db(chunks,add_to_existing=True)
+        
     except Exception as e:
-        logging.error(f"Failed to list PDF files: {e}")
-        print(f"Error: Failed to list PDF files in the directory. Check permissions.")
-        sys.exit(1)
+        print(e)
 
-    # --- Initialize and Setup RAG System ---
+def compress_memories(memoryRAG,messages):
     try:
-        print("\nInitializing RAG system...")
-        rag_system = PdfRagSystem(
-            embed_model=args.embed_model,
-            llm_model=args.llm_model,
-            chunk_size=args.chunk_size,
-            chunk_overlap=args.chunk_overlap,
+        write_memories_to_disk(memoryRAG,messages)
+        memoryRAG.compress_vector_db()
+        print("Memories Compressed!")
+    except Exception as e:
+        print(e)
+def suppress_stderr():
+    pass
+
+def Speech_Engine():
+    engine=pyttsx3.init()
+    return engine
+
+def Speak(text):
+    device="cuda" if torch.cuda.is_available() else "cpu"
+    #device="cpu"
+    if device=="cpu":print("Offloading Voice Model to CPU")
+    text=text.replace('*','')
+    #tts=TTS("tts_models/en/jenny/jenny").to(device)
+    tts=TTS("tts_models/en/ljspeech/neural_hmm").to(device)
+    filename='voice_cache/tts.wav'
+    tts.tts_to_file(text=text,file_path=filename)
+    wf=wave.open(filename)
+    p=pyaudio.PyAudio()
+    stream = p.open(format =
+                p.get_format_from_width(wf.getsampwidth()),
+                channels = wf.getnchannels(),
+                rate = wf.getframerate(),
+                output = True)
+    data=wf.readframes(1024)
+    print(text)
+    while data:
+        stream.write(data)
+        data=wf.readframes(1024)
+    wf.close()
+    stream.close()
+    p.terminate()
+
+def Listen():
+    engine=Speech_Engine()
+    recog=sr.Recognizer()
+    with sr.Microphone() as source:
+        recog.adjust_for_ambient_noise(source,duration=0.2)
+        sound=recog.listen(source,timeout=5000,phrase_time_limit=5000)
+        return recog.recognize_whisper(sound,language="english")
+
+memoryRAG=RagSystem(
+            embed_model= "BAAI/llm-embedder",
+            llm_model = "gemma3:1b",
+            chunk_size = 1200,
+            chunk_overlap = 300,
+            collection ="memories",
+            rag_threshhold=0.99
+        )
+        
+#memory_cache_path="Docs/Juniper_memories"
+'''
+print("Loading From Emotion Database")
+emotionRAG=RagSystem(
+            embed_model= "BAAI/llm-embedder",
+            llm_model = "gemma3:1b",
+            chunk_size = 1200,
+            chunk_overlap = 300,
+            collection ="emotions",
+            rag_threshhold=0.99
+        )
+        
+emotion_cache_path="Docs/emotions"
+emotion_pdf_paths=[]
+emotion_hug_paths=["dair-ai/emotion","dair-ai/emotion"]
+emotion_hug_cols=["text","label"]
+'''
+'''
+chunks=emotionRAG.load_all(pdfs_dir=emotion_pdf_paths,
+                             hugs_dir=emotion_hug_paths,
+                             hug_cache=emotion_cache_path,
+                             hug_cols=emotion_hug_cols)
+emotionRAG.create_vector_db(chunks)
+'''
+       
+mathRAG=RagSystem(
+            embed_model= "BAAI/llm-embedder",
+            llm_model = "deepseek-r1:1.5b",
+            chunk_size = 1200,
+            chunk_overlap = 300,
+            collection ="math",
+            rag_threshhold=0.8
+        ) 
+philRAG=RagSystem(
+            embed_model= "BAAI/llm-embedder",
+            llm_model = "gemma3:1b",
+            chunk_size = 1200,
+            chunk_overlap = 300,
+            collection ="phil",    
+            rag_threshhold=0.8
+        ) 
+italyRAG=RagSystem(
+            embed_model= "BAAI/llm-embedder",
+            llm_model = "gemma3:1b",
+            chunk_size = 1200,
+            chunk_overlap = 300,
+            collection ="italy",    
+            rag_threshhold=0.8
+        )
+       
+us_histRAG=RagSystem(
+            embed_model= "BAAI/llm-embedder",
+            llm_model = "gemma3:1b",
+            chunk_size = 1200,
+            chunk_overlap = 300,
+            collection ="us_hist",
+            rag_threshhold=0.8
         )
 
-        # Load -> Create DB -> Setup Chain
-        chunks = rag_system.load_pdfs(pdf_files)  # Handles internal logging/printing
-        rag_system.create_vector_db(chunks=chunks, collection_name=args.collection_name)
-        rag_system.setup_rag_chain()
+fictionRAG=RagSystem(
+            embed_model= "BAAI/llm-embedder",
+            llm_model = "gemma3:1b",
+            chunk_size = 1200,
+            chunk_overlap = 300,
+            collection ="fiction",
+            rag_threshhold=0.8
+        )
 
-        print("\n=== Multi-PDF RAG System Ready ===")
-        print("Type your question or '/exit' to quit.")
 
+math_cache_path="Docs/math"
+phil_cache_path="Docs/phil"
+italy_cache_path="Docs/italy"
+us_hist_cache_path="Docs/us_history"
+fiction_cache_path="Docs/fiction"
+
+
+math_pdf_paths=find_pdf_files(math_cache_path)
+phil_pdf_paths=find_pdf_files(phil_cache_path)
+italy_pdf_paths=find_pdf_files(italy_cache_path)
+us_hist_pdf_paths=find_pdf_files(us_hist_cache_path)
+fiction_pdf_paths=find_pdf_files(fiction_cache_path)
+
+math_hug_paths=[]#["qwedsacf/competition_math"]
+phil_hug_paths=[]#["Heigke/stanford-enigma-philosophy-chat"]
+italy_hug_paths=[]
+us_hist_hug_paths=[]
+fiction_hug_paths=[]
+
+
+math_hug_cols=["problem"]
+phil_hug_cols=["output"]
+italy_hug_cols=[]
+us_hist_hug_cols=[]
+fiction_hug_cols=[]
+
+load_from_files=False
+if load_from_files:
+    #===============================================
+    print("Loading First LLM")
+    chunks=us_histRAG.load_all(pdfs_dir=us_hist_pdf_paths,
+                             hugs_dir=us_hist_hug_paths,
+                             hug_cache=us_hist_cache_path,
+                             hug_cols=us_hist_hug_cols)
+    us_histRAG.create_vector_db(chunks)
+
+   #===============================================
+    print("Loading Second LLM")
+    chunks=mathRAG.load_all(pdfs_dir=math_pdf_paths,
+                             hugs_dir=math_hug_paths,
+                             hug_cache=math_cache_path,
+                             hug_cols=math_hug_cols)
+    mathRAG.create_vector_db(chunks)
+    #===============================================
+    print("Loading Third LLM")
+    chunks=philRAG.load_all(pdfs_dir=phil_pdf_paths,
+                             hugs_dir=phil_hug_paths,
+                             hug_cache=phil_cache_path,
+                             hug_cols=phil_hug_cols)
+    philRAG.create_vector_db(chunks)
+    print("Loading Fourth LLM")
+    chunks=italyRAG.load_all(pdfs_dir=italy_pdf_paths,
+                             hugs_dir=italy_hug_paths,
+                             hug_cache=italy_cache_path,
+                             hug_cols=italy_hug_cols)
+    italyRAG.create_vector_db(chunks)
+    print("Loading Fifth LLM")
+    chunks=fictionRAG.load_all(pdfs_dir=fiction_pdf_paths,
+                             hugs_dir=fiction_hug_paths,
+                             hug_cache=fiction_cache_path,
+                             hug_cols=fiction_hug_cols)
+    fictionRAG.create_vector_db(chunks)
+
+
+print("======================VcB Loaded=====================")
+Brain=llmNetwork(
+                 breakdown_model="qwen2.5:3b",
+                 ideas_model="granite3.2:2b",
+                 think_model="granite3.2:2b",
+                 verify_model="granite3.2:2b",
+                 response_model="gemma3:4b",
+                 memoryRAG=memoryRAG,
+                 #emotionRAG=emotionRAG,
+                 vision_model="gemma3:4b",
+                 huggingface_sentiment_model="cardiffnlp/twitter-roberta-base-sentiment",
+                 huggingface_emotion_model="cardiffnlp/twitter-roberta-base-emotion",
+                 name="Misato",
+                 )
+Brain.add_rag_system([us_histRAG,philRAG,mathRAG,italyRAG])
+print("=================Prompting LLMR System===============")
+#print(Brain.query("What is Jurisprudence?"))
+#print(Brain.query("What is Representation Theory?"))
+#print(Brain.query("Who was Karl Marx?"))
+messages=[]
+#emotion_history=[]
+iterations=0
+while True:
+    os.system('ollama ps')
+    try:    
+        print("Listening")
+        usr_in=input("==>")
+        messages.append(("human",usr_in))
+        print(usr_in)
+        if(usr_in):
+            print("Speaking")
+            response=Brain.chat(messages)
+            Speak(response)
+            messages.append(("assistant",response))
+            #emotion_history.append(("assistant",emotional_state))
+            if len(messages)>6:
+                print("Saving Messages to Disk")
+                write_memories_to_disk(Brain.memoryRAG,messages)
+                print("Memories Saved!")
+                #print("Saving Emotional History to Disk")
+                #write_memories_to_disk(Brain.emotionRAG,emotion_history)
+                #print("Emotional History  Saved!")
+
+                #emotion_history=[]
+                messages=messages[2:]
     except Exception as e:
-        logging.critical(f"Failed to initialize RAG system: {e}", exc_info=True)
-        print(f"\nError initializing RAG system: {e}")
-        print("Please check your Ollama setup, model names, and file permissions.")
-        sys.exit(1)
+        print(e)
+    iterations+=1
+    iterations=iterations%10
+    if(iterations==2):
+        print("Compressing Memories")
+        compress_memories(Brain.memoryRAG,messages)
 
-    # --- Interactive Query Loop ---
-    while True:
-        try:
-            query = input("\nEnter your prompt: ")
-            if query.lower().strip() == "/exit":
-                print("Exiting PDF RAG System. Goodbye!")
-                break
-
-            result = rag_system.query(question=query)
-            print("\n--- Answer ---")
-            print(result)
-            print("--------------")
-
-        except Exception as e:
-            logging.error(f"Error during query processing: {e}", exc_info=True)
-            print(f"\nAn error occurred: {e}")
-            print("Please try again or type '/exit' to quit.")
-        except KeyboardInterrupt:  # Allow Ctrl+C to exit gracefully
-            print("\nExiting PDF RAG System. Goodbye!")
-            break
-
-
-if __name__ == "__main__":
-    main()
+        #print("Compressing Emotional History")
+        #compress_memories(Brain.emotionRAG,emotion_history)
