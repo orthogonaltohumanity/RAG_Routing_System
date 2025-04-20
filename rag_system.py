@@ -96,20 +96,7 @@ class RagSystem:
         self.rag_threshhold=rag_threshhold
         self.retriever_template=retriever_template
         self.rag_template=rag_template
-    '''
-    def load_from_path(self,path,jq_schema):
-        path=path+"/"+self.collection
-        path.replace("//","/")
-        print(path)
-        json_files=find_json_files(path)
-        pdf_files=find_pdf_files(path)
 
-        json_chunks=self.load_json(json_files,jq_schema)
-        pdf_chunks=self.load_pdfs(pdf_files)    
-        
-        all_chunks=json_chunks+pdf_chunks
-        self.create_vector_db(all_chunks)
-    '''
     def load_all(self,pdfs_dir:list,hugs_dir:list,hug_cache:str,hug_cols:list):
         chunks=[]
         chunks.extend(self.load_pdfs(pdfs_dir))

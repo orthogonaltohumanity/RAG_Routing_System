@@ -32,42 +32,9 @@ def compress_memories(memoryRAG,messages):
 def suppress_stderr():
     pass
 
-def Speech_Engine():
-    engine=pyttsx3.init()
-    return engine
 
-def Speak(text):
-    device="cuda" if torch.cuda.is_available() else "cpu"
-    #device="cpu"
-    if device=="cpu":print("Offloading Voice Model to CPU")
-    text=text.replace('*','')
-    #tts=TTS("tts_models/en/jenny/jenny").to(device)
-    tts=TTS("tts_models/en/ljspeech/neural_hmm").to(device)
-    filename='voice_cache/tts.wav'
-    tts.tts_to_file(text=text,file_path=filename)
-    wf=wave.open(filename)
-    p=pyaudio.PyAudio()
-    stream = p.open(format =
-                p.get_format_from_width(wf.getsampwidth()),
-                channels = wf.getnchannels(),
-                rate = wf.getframerate(),
-                output = True)
-    data=wf.readframes(1024)
-    print(text)
-    while data:
-        stream.write(data)
-        data=wf.readframes(1024)
-    wf.close()
-    stream.close()
-    p.terminate()
 
-def Listen():
-    engine=Speech_Engine()
-    recog=sr.Recognizer()
-    with sr.Microphone() as source:
-        recog.adjust_for_ambient_noise(source,duration=0.2)
-        sound=recog.listen(source,timeout=5000,phrase_time_limit=5000)
-        return recog.recognize_whisper(sound,language="english")
+
 
 memoryRAG=RagSystem(
             embed_model= "BAAI/llm-embedder",
@@ -78,31 +45,7 @@ memoryRAG=RagSystem(
             rag_threshhold=0.99
         )
         
-#memory_cache_path="Docs/Juniper_memories"
-'''
-print("Loading From Emotion Database")
-emotionRAG=RagSystem(
-            embed_model= "BAAI/llm-embedder",
-            llm_model = "gemma3:1b",
-            chunk_size = 1200,
-            chunk_overlap = 300,
-            collection ="emotions",
-            rag_threshhold=0.99
-        )
-        
-emotion_cache_path="Docs/emotions"
-emotion_pdf_paths=[]
-emotion_hug_paths=["dair-ai/emotion","dair-ai/emotion"]
-emotion_hug_cols=["text","label"]
-'''
-'''
-chunks=emotionRAG.load_all(pdfs_dir=emotion_pdf_paths,
-                             hugs_dir=emotion_hug_paths,
-                             hug_cache=emotion_cache_path,
-                             hug_cols=emotion_hug_cols)
-emotionRAG.create_vector_db(chunks)
-'''
-       
+
 mathRAG=RagSystem(
             embed_model= "BAAI/llm-embedder",
             llm_model = "deepseek-r1:1.5b",
@@ -243,7 +186,7 @@ while True:
         if(usr_in):
             print("Speaking")
             response=Brain.chat(messages)
-            Speak(response)
+            print(response)
             messages.append(("assistant",response))
             #emotion_history.append(("assistant",emotional_state))
             if len(messages)>6:
