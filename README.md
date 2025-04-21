@@ -1,6 +1,5 @@
 ## A LLM/RAG Routing Model
-
-This is the result of my first week programming with Large Language Models. The model works by taking a prompt and an image then feeding these into a series of LLMs and RAG pulls. It works with Ollama and its simple to edit main.py so that the system can use any model you want. You'll see I'm using smaller models for efficiency. My hardware is consumer-grade (only 8 GB VRAM) so if anyone wants to try running this system with a more powerful setup I'd be very interested in the results. 
+ The model works by taking a prompt and an image then feeding these into a series of LLMs and RAG pulls. It works with Ollama and its simple to edit main.py so that the system can use any model you want. You'll see I'm using smaller models for efficiency. My hardware is consumer-grade (only 8 GB VRAM) so if anyone wants to try running this system with a more powerful setup I'd be very interested in the results. 
 
 I've gotten some interesting results. I wrote the code in 3 stages which I'll document as follows.
 
